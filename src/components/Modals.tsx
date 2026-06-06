@@ -127,6 +127,7 @@ export const DeleteModal: React.FC<{ item: FileItem | null; onClose: () => void 
 export const PreviewModal: React.FC<{ item: FileItem | null; onClose: () => void }> = ({ item, onClose }) => {
   const [textContent, setTextContent] = React.useState<string | null>(null);
   const [objectUrl, setObjectUrl] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!item || item.type === 'folder') {
@@ -135,15 +136,31 @@ export const PreviewModal: React.FC<{ item: FileItem | null; onClose: () => void
       return;
     }
 
-    if (item.blob) {
-      if (item.blob.type.startsWith('text/') || item.name.match(/\.(md|json|csv|txt|tsx|ts|js|html|css)$/i)) {
-         item.blob.text().then(text => setTextContent(text)).catch(() => setTextContent("Error reading text."));
-      } else {
-        const url = URL.createObjectURL(item.blob);
-        setObjectUrl(url);
-        return () => URL.revokeObjectURL(url);
+    const loadContent = async () => {
+      setIsLoading(true);
+      try {
+        const url = `/api/file?path=${encodeURIComponent(item.path)}`;
+        const isTextLike = item.name.match(/\.(md|json|csv|txt|tsx|ts|js|html|css)$/i);
+        
+        if (isTextLike || item.type === 'document') {
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              const text = await res.text();
+              setTextContent(text);
+            }
+          } catch (e) {
+            console.error("Failed to load text");
+          }
+        } else {
+          setObjectUrl(url);
+        }
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    loadContent();
   }, [item]);
 
   if (!item) return null;

@@ -3,12 +3,12 @@ import { useFiles } from '../context/FileContext';
 import { FileItem } from '../types';
 import { getFileIcon } from './Icons';
 import { formatFileSize, formatDate } from '../utils/formatters';
-import { MoreVertical, Download, Edit2, Trash2, Eye } from 'lucide-react';
+import { MoreVertical, Download, Edit2, Trash2, Eye, Link } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { cn } from '../utils/cn';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface FileComponentsProps {
-  files: FileItem[];
   onRename: (item: FileItem) => void;
   onDelete: (item: FileItem) => void;
   onPreview: (item: FileItem) => void;
@@ -101,8 +101,8 @@ const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; 
   );
 };
 
-export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDelete, onPreview }) => {
-  const { viewMode, downloadFile } = useFiles();
+export const FileGrid: React.FC<FileComponentsProps> = ({ onRename, onDelete, onPreview }) => {
+  const { viewMode, downloadFile, displayedFiles } = useFiles();
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: FileItem } | null>(null);
 
   useEffect(() => {
@@ -116,11 +116,16 @@ export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDel
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, item });
   };
+  
+  const copyPath = (path: string) => {
+    navigator.clipboard.writeText(path);
+    toast.success("Path copied to clipboard");
+  };
 
   return (
     <>
       <div className="p-6 md:p-8 max-w-[1600px] mx-auto w-full">
-        {files.length === 0 ? (
+        {displayedFiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-60">
             <div className="w-32 h-32 mb-6 text-slate-800 animate-pulse">
                <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
@@ -132,13 +137,13 @@ export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDel
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {files.map(item => (
+            {displayedFiles.map(item => (
               <FileCard key={item.id} item={item} onRename={onRename} onDelete={onDelete} onPreview={onPreview} onContext={handleContextMenuClick} />
             ))}
           </div>
         ) : (
           <div className="bg-slate-900/40 rounded-2xl border border-slate-800 overflow-hidden">
-            {files.map(item => (
+            {displayedFiles.map(item => (
               <FileListItem key={item.id} item={item} onRename={onRename} onDelete={onDelete} onPreview={onPreview} onContext={handleContextMenuClick} />
             ))}
           </div>
@@ -169,6 +174,9 @@ export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDel
                 </button>
               </>
             )}
+            <button onClick={() => { copyPath(contextMenu.item.path); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 flex items-center gap-3 transition-colors text-slate-200">
+              <Link className="w-4 h-4 text-slate-400" /> Copy Path
+            </button>
             <button onClick={() => { onRename(contextMenu.item); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 flex items-center gap-3 transition-colors text-slate-200">
               <Edit2 className="w-4 h-4 text-slate-400" /> Rename
             </button>

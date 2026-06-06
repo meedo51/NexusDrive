@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
-import { saveAs } from 'file-saver';
-import { db } from '../db/db';
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { fileApi } from '../api/client';
 import { FileItem, FileType, ViewMode, SortBy, SortOrder } from '../types';
 
 interface FileContextType {
@@ -42,9 +42,9 @@ const FileContext = createContext<FileContextType | undefined>(undefined);
 
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSupported, setIsSupported] = useState(true);
-  const [rootHandle, setRootHandle] = useState<any>(null);
+  const [rootHandle, setRootHandle] = useState<any>(true); // Mock handling
   const [needsPermission, setNeedsPermission] = useState(false);
-  const [rootName, setRootName] = useState<string>('');
+  const [rootName, setRootName] = useState<string>('Server Storage');
 
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -56,107 +56,34 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!('showDirectoryPicker' in window)) {
-      setIsSupported(false);
-      return;
+  const loadDirectory = async (pathArr: string[]) => {
+    try {
+      const pathStr = '/' + pathArr.join('/');
+      const items = await fileApi.listFiles(pathStr);
+      setFiles(items);
+      setCurrentPath(pathArr);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load dir', err);
+      setError(err.message || 'Failed to load directory');
     }
-    db.settings.get('root-handle').then(async (record) => {
-      if (record && record.handle) {
-        const handle = record.handle;
-        setRootName(handle.name);
-        try {
-          const perm = await handle.queryPermission({ mode: 'readwrite' });
-          if (perm === 'granted') {
-            setRootHandle(handle);
-            loadDirectory(handle, []);
-          } else {
-            setRootHandle(handle);
-            setNeedsPermission(true);
-          }
-        } catch (e) {
-          console.error("Permission query failed:", e);
-        }
-      }
-    });
+  };
+
+  useEffect(() => {
+    loadDirectory([]);
   }, []);
 
-  const resolvePath = async (root: any, path: string[]) => {
-    let curr = root;
-    for (const part of path) {
-      curr = await curr.getDirectoryHandle(part);
-    }
-    return curr;
-  };
-
-  const loadDirectory = async (root: any, path: string[]) => {
-    try {
-      const dir = await resolvePath(root, path);
-      const items: FileItem[] = [];
-      // @ts-ignore
-      for await (const [name, handle] of dir.entries()) {
-        if (handle.kind === 'file') {
-          const file = await handle.getFile();
-          let type: FileType = 'other';
-          if (file.type.startsWith('image/')) type = 'image';
-          else if (file.type.startsWith('video/')) type = 'video';
-          else if (file.type === 'application/pdf' || file.name.match(/\\.(doc|docx|txt|md|csv|json)$/i)) type = 'document';
-
-          items.push({
-             id: [...path, name].join('/'),
-             name, type, size: file.size,
-             modifiedAt: new Date(file.lastModified).toISOString(),
-             handle, blob: file
-          });
-        } else if (handle.kind === 'directory') {
-          items.push({
-             id: [...path, name].join('/'),
-             name, type: 'folder', size: 0,
-             modifiedAt: new Date().toISOString(),
-             handle
-          });
-        }
-      }
-      setFiles(items);
-      setCurrentPath(path);
-    } catch (err) {
-      console.error('Failed to load dir', err);
-    }
-  };
-
   const connectStorage = async () => {
-    try {
-      // @ts-ignore
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      await db.settings.put({ id: 'root-handle', handle });
-      setRootHandle(handle);
-      setRootName(handle.name);
-      setNeedsPermission(false);
-      await loadDirectory(handle, []);
-    } catch (e) {
-      console.warn('User aborted or error:', e);
-    }
+    await loadDirectory([]);
   };
 
   const grantPermission = async () => {
-    if (!rootHandle) return;
-    try {
-      const perm = await rootHandle.requestPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        setNeedsPermission(false);
-        await loadDirectory(rootHandle, currentPath);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    setNeedsPermission(false);
   };
 
   const disconnectStorage = async () => {
-    await db.settings.clear();
-    setRootHandle(null);
-    setRootName('');
-    setFiles([]);
-    setCurrentPath([]);
+    // Cannot disconnect server storage
+    toast.error("Cannot disconnect from remote server storage");
   };
 
   const displayedFiles = useMemo(() => {
@@ -171,7 +98,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let comparison = 0;
       if (sortBy === 'name') comparison = a.name.localeCompare(b.name);
       else if (sortBy === 'size') comparison = a.size - b.size;
-      else if (sortBy === 'date') comparison = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
+      else if (sortBy === 'date') comparison = new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
 
       if (a.type === 'folder' && b.type !== 'folder') return -1;
       if (b.type === 'folder' && a.type !== 'folder') return 1;
@@ -183,106 +110,79 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createFolder = async (name: string) => {
     try {
-      const dir = await resolvePath(rootHandle, currentPath);
-      await dir.getDirectoryHandle(name, { create: true });
-      await loadDirectory(rootHandle, currentPath);
-      setError(null);
+      const folderPath = '/' + [...currentPath, name].join('/');
+      await fileApi.createFolder(folderPath);
+      await loadDirectory(currentPath);
+      toast.success("Folder created");
     } catch (e: any) {
-      console.error(e);
-      setError(e.message || "Failed to create folder. It might already exist.");
+      toast.error(e.message || "Failed to create folder");
     }
   };
 
   const uploadFiles = async (filesToUpload: File[]) => {
     try {
-      const dir = await resolvePath(rootHandle, currentPath);
-      for (const f of filesToUpload) {
-        const fileHandle = await dir.getFileHandle(f.name, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(f);
-        await writable.close();
-      }
-      await loadDirectory(rootHandle, currentPath);
-      setError(null);
+      const pathStr = '/' + currentPath.join('/');
+      toast.promise(
+        fileApi.uploadFiles(pathStr, filesToUpload),
+        {
+          loading: `Uploading ${filesToUpload.length} file(s)...`,
+          success: () => {
+            loadDirectory(currentPath);
+            return 'Upload complete';
+          },
+          error: 'Upload failed'
+        }
+      );
     } catch (e: any) {
       console.error(e);
-      setError(e.message || "Failed to upload files. Check permissions or disk space.");
+      toast.error(e.message || "Upload failed");
     }
   };
 
   const deleteFile = async (item: FileItem) => {
     try {
-      const dir = await resolvePath(rootHandle, currentPath);
-      await dir.removeEntry(item.name, { recursive: true });
-      await loadDirectory(rootHandle, currentPath);
-      setError(null);
+      await fileApi.deleteItem(item.path);
+      await loadDirectory(currentPath);
+      toast.success("Deleted successfully");
     } catch (e: any) {
-      console.error(e);
-      setError(e.message || "Failed to delete item.");
-    }
-  };
-
-  const copyDirectory = async (sourceDir: any, destDir: any) => {
-    for await (const [name, handle] of sourceDir.entries()) {
-      if (handle.kind === 'file') {
-        const sourceFile = await handle.getFile();
-        const destFileHandle = await destDir.getFileHandle(name, { create: true });
-        const writable = await destFileHandle.createWritable();
-        await writable.write(sourceFile);
-        await writable.close();
-      } else if (handle.kind === 'directory') {
-        const newDestDir = await destDir.getDirectoryHandle(name, { create: true });
-        await copyDirectory(handle, newDestDir);
-      }
+      toast.error(e.message || "Failed to delete item");
     }
   };
 
   const renameFile = async (item: FileItem, newName: string) => {
     if (item.name === newName) return;
     try {
-      const dir = await resolvePath(rootHandle, currentPath);
-      
-      try {
-        // @ts-ignore
-        if (item.handle.move) {
-          // @ts-ignore
-          await item.handle.move(newName);
-          await loadDirectory(rootHandle, currentPath);
-          setError(null);
-          return;
-        }
-      } catch (e) {
-        console.warn("Native move failed, falling back to manual copy", e);
-      }
-
-      if (item.type === 'folder') {
-        const newDirHandle = await dir.getDirectoryHandle(newName, { create: true });
-        await copyDirectory(item.handle, newDirHandle);
-        await dir.removeEntry(item.name, { recursive: true });
-      } else {
-        const file = await item.handle.getFile();
-        const newHandle = await dir.getFileHandle(newName, { create: true });
-        const writable = await newHandle.createWritable();
-        await writable.write(file);
-        await writable.close();
-        await dir.removeEntry(item.name);
-      }
-      await loadDirectory(rootHandle, currentPath);
-      setError(null);
+      await fileApi.renameItem(item.path, newName);
+      await loadDirectory(currentPath);
+      toast.success("Renamed successfully");
     } catch (e: any) {
-      console.error(e);
-      setError(e.message || "Failed to rename item. Name might conflict.");
+      toast.error(e.message || "Failed to rename item");
     }
   };
 
   const downloadFile = (item: FileItem) => {
-    if (item.blob) saveAs(item.blob, item.name);
+    if (item.type === 'folder') {
+      toast.error("Downloading folders not supported yet");
+      return;
+    }
+    const url = fileApi.getDownloadUrl(item.path);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.download = item.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const interceptSetCurrentPath = (path: string[]) => {
+    loadDirectory(path);
   };
 
   return (
     <FileContext.Provider value={{
       isSupported, rootHandle, needsPermission, rootName, files, currentPath, searchQuery, filterType, sortBy, sortOrder, viewMode, displayedFiles, error, setError,
-      connectStorage, grantPermission, disconnectStorage, setCurrentPath, setSearchQuery, setFilterType, setSortBy, setSortOrder, setViewMode,
+      connectStorage, grantPermission, disconnectStorage, setCurrentPath: interceptSetCurrentPath, setSearchQuery, setFilterType, setSortBy, setSortOrder, setViewMode,
       createFolder, uploadFiles, deleteFile, renameFile, downloadFile
     }}>
       {children}

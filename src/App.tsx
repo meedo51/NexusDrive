@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Toaster } from 'react-hot-toast';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { BreadcrumbsBar } from './components/BreadcrumbsBar';
@@ -27,59 +28,9 @@ const FileManagerApp = () => {
     }
   }, [error, setError]);
 
-  if (!isSupported) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen w-full bg-[#020617] text-slate-200">
-        <AlertTriangle className="w-16 h-16 text-rose-500 mb-6" />
-        <h1 className="text-2xl font-bold mb-2 text-white">Browser Not Supported</h1>
-        <p className="text-slate-400">Your browser does not support the File System Access API.</p>
-        <p className="text-slate-400">Please use Chrome, Edge, or Opera on desktop.</p>
-      </div>
-    );
-  }
-
-  if (!rootHandle) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen w-full bg-[#020617] text-slate-200 selection:bg-indigo-500/30">
-        <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-500 mb-8 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
-          <HardDrive className="w-10 h-10" />
-        </div>
-        <h1 className="text-4xl font-bold mb-4 text-white tracking-tight">Nexus Storage</h1>
-        <p className="text-slate-400 max-w-md text-center mb-10 leading-relaxed">
-          Select a local folder on your computer to serve as the root storage for this application. All files and folders will be created directly on your disk.
-        </p>
-        <button 
-          onClick={connectStorage}
-          className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-all shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] hover:-translate-y-1 active:translate-y-0"
-        >
-          Select Storage Location
-        </button>
-      </div>
-    );
-  }
-
-  if (needsPermission) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen w-full bg-[#020617] text-slate-200">
-        <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-500 mb-8 border border-amber-500/30">
-          <ShieldAlert className="w-10 h-10" />
-        </div>
-        <h1 className="text-2xl font-bold mb-4 text-white tracking-tight">Permission Required</h1>
-        <p className="text-slate-400 max-w-md text-center mb-8 leading-relaxed">
-          Nexus Storage needs permission to access your connected folder: <strong className="text-slate-200">"{rootName}"</strong>
-        </p>
-        <button 
-          onClick={grantPermission}
-          className="px-8 py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-medium transition-all shadow-lg hover:-translate-y-1"
-        >
-          Grant Permission
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen w-full bg-[#020617] font-sans text-slate-200 overflow-hidden selection:bg-indigo-500/30">
+      <Toaster position="bottom-center" toastOptions={{ style: { background: '#1e293b', color: '#fff' } }} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       <div className="flex-1 flex flex-col min-w-0 relative">
@@ -94,7 +45,6 @@ const FileManagerApp = () => {
             <BreadcrumbsBar />
             <div className="flex-1 overflow-y-auto">
               <FileGrid 
-                files={displayedFiles} 
                 onRename={setItemToRename} 
                 onDelete={setItemToDelete}
                 onPreview={setItemToPreview}
