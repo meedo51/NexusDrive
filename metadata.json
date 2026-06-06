@@ -1,0 +1,6 @@
+{
+  "name": "Nexus Files",
+  "description": "A modern, futuristic file manager app with fluid UI and dark mode support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
