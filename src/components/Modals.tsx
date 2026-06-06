@@ -139,7 +139,7 @@ export const PreviewModal: React.FC<{ item: FileItem | null; onClose: () => void
     const loadContent = async () => {
       setIsLoading(true);
       try {
-        const url = `/api/file?path=${encodeURIComponent(item.path)}`;
+        const url = `/api/download?path=${encodeURIComponent(item.path)}`;
         const isTextLike = item.name.match(/\.(md|json|csv|txt|tsx|ts|js|html|css)$/i);
         
         if (isTextLike || item.type === 'document') {

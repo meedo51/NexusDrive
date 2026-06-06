@@ -10,6 +10,7 @@ import { CreateFolderModal, RenameModal, DeleteModal, PreviewModal, SettingsModa
 import { FileProvider, useFiles } from './context/FileContext';
 import { FileItem } from './types';
 import { HardDrive, AlertTriangle, ShieldAlert, X } from 'lucide-react';
+import { BulkActionsBar } from './components/BulkActionsBar';
 
 const FileManagerApp = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -59,6 +60,7 @@ const FileManagerApp = () => {
       <RenameModal item={itemToRename} onClose={() => setItemToRename(null)} />
       <DeleteModal item={itemToDelete} onClose={() => setItemToDelete(null)} />
       <PreviewModal item={itemToPreview} onClose={() => setItemToPreview(null)} />
+      <BulkActionsBar />
 
       <AnimatePresence>
         {error && (

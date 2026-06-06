@@ -20,6 +20,13 @@ interface FileContextType {
   error: string | null;
   setError: (e: string | null) => void;
   
+  selectedIds: Set<string>;
+  toggleSelection: (id: string) => void;
+  clearSelection: () => void;
+  selectAll: () => void;
+  bulkDeleteSelected: () => Promise<void>;
+  bulkDownloadSelected: () => void;
+  
   connectStorage: () => Promise<void>;
   grantPermission: () => Promise<void>;
   disconnectStorage: () => Promise<void>;
@@ -55,6 +62,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadDirectory = async (pathArr: string[]) => {
     try {
@@ -62,6 +70,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const items = await fileApi.listFiles(pathStr);
       setFiles(items);
       setCurrentPath(pathArr);
+      setSelectedIds(new Set());
       setError(null);
     } catch (err: any) {
       console.error('Failed to load dir', err);
@@ -160,6 +169,51 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAll = () => setSelectedIds(new Set(displayedFiles.map(f => f.id)));
+
+  const bulkDeleteSelected = async () => {
+    const paths = displayedFiles.filter(f => selectedIds.has(f.id)).map(f => f.path);
+    if (!paths.length) return;
+    try {
+      await fileApi.bulkDelete(paths);
+      await loadDirectory(currentPath);
+      toast.success(`${paths.length} items deleted`);
+    } catch (e: any) {
+      toast.error(e.message || "Bulk delete failed");
+    }
+  };
+
+  const bulkDownloadSelected = async () => {
+    const paths = displayedFiles.filter(f => selectedIds.has(f.id)).map(f => f.path);
+    if (!paths.length) return;
+    try {
+      toast.loading("Zipping files...", { id: 'zip' });
+      const blob = await fileApi.bulkDownload(paths);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nexus_archive_${new Date().getTime()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Download started", { id: 'zip' });
+      clearSelection();
+    } catch (e: any) {
+      toast.error(e.message || "Bulk download failed", { id: 'zip' });
+    }
+  };
+
   const downloadFile = (item: FileItem) => {
     if (item.type === 'folder') {
       toast.error("Downloading folders not supported yet");
@@ -182,6 +236,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <FileContext.Provider value={{
       isSupported, rootHandle, needsPermission, rootName, files, currentPath, searchQuery, filterType, sortBy, sortOrder, viewMode, displayedFiles, error, setError,
+      selectedIds, toggleSelection, clearSelection, selectAll, bulkDeleteSelected, bulkDownloadSelected,
       connectStorage, grantPermission, disconnectStorage, setCurrentPath: interceptSetCurrentPath, setSearchQuery, setFilterType, setSortBy, setSortOrder, setViewMode,
       createFolder, uploadFiles, deleteFile, renameFile, downloadFile
     }}>

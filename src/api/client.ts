@@ -20,6 +20,14 @@ export const fileApi = {
     return res.json();
   },
 
+  async getInfo(path: string) {
+    const res = await fetch(`${API_URL}/info?path=${encodeURIComponent(path)}`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   async createFolder(path: string) {
     const res = await fetch(`${API_URL}/folder`, {
       method: 'POST',
@@ -69,9 +77,29 @@ export const fileApi = {
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
+
+  async bulkDelete(paths: string[]) {
+    const res = await fetch(`${API_URL}/bulk-delete`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ paths })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async bulkDownload(paths: string[]) {
+    const res = await fetch(`${API_URL}/bulk-download`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ paths })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.blob();
+  },
   
   getDownloadUrl(path: string) {
-    let url = `${window.location.origin}${API_URL}/file?path=${encodeURIComponent(path)}`;
+    let url = `${window.location.origin}${API_URL}/download?path=${encodeURIComponent(path)}`;
     const apiKey = localStorage.getItem('SERVERFS_API_KEY');
     if (apiKey) url += `&apiKey=${encodeURIComponent(apiKey)}`;
     return url;

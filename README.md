@@ -1,53 +1,50 @@
-# ServerFS
+# Nexus File Hub
 
-ServerFS is a production-ready File Manager App that connects to a specific configurable folder on your server as the main storage location. All file operations (upload, rename, delete, folder creation) happen directly within this server directory using a Node.js + Express backend.
+Nexus File Hub is a production-ready File Manager App built for Hostinger Cloud Startup's Node.js Web App feature.
 
 ## Features
 - **Modern React + Vite Frontend:** Clean UI crafted with Tailwind CSS and glassmorphic touches.
 - **Express Backend:** Uses standard Node.js libraries (`fs/promises`, `multer`) to read and write to standard real folders.
 - **Real persistence:** Uploaded files exist in real standard directories. 
-- **Docker Ready:** Spin up with a simple `docker-compose up` command.
+- **Bulk Operations:** Download Multiple as ZIP and Delete Multiple directly via API.
 - **Path Verification:** Prevents path traversal vulnerabilities so they cannot escape the storage root.
 
-## Quick Start (Docker - Recommended)
+## Hostinger Node.js Deployment Specifications
 
-The simplest way is to spin up using the provided Docker compose configuration which maps the storage internally to `./storage`:
+This application uses the EXACT folder as the main storage root:
+`/home/u761138213/domains/nexus.s2u.me/public_html/data/`
 
+### Step 1: Prepare Files
 ```bash
-docker-compose up --build
-```
-The app will bind to `localhost:3000`.
-
-## Local Development (Without Docker)
-
-You will need Node.js >= 18 installed.
-
-1. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Configure Environment:**
-   Review `.env.example` and create a `.env` file. You can leave the default storage path or change it:
-   ```env
-   STORAGE_PATH=./storage
-   PORT=3000
-   ```
-
-3. **Run Dev server (Full stack):**
-   ```bash
-   npm run dev
-   ```
-
-## Production Build
-
-To build the static frontend and compile the backend into a single `server.cjs` file, run:
-
-```bash
+# On your local machine, build the frontend
+cd frontend
 npm run build
-npm start
+# Copy dist/ contents to your Hostinger domain's public_html folder
 ```
 
-## Cloud Serverless Deployments (Vercel)
+### Step 2: Upload Backend to Hostinger
+```bash
+# Using FTP or Hostinger File Manager
+# Upload backend/ folder contents to:
+# /home/u761138213/domains/nexus.s2u.me/node-app/
+```
 
-You can deploy to Vercel. A sample `vercel.json` is provided that points the `/api/(.*)` routes to the compiled Node backend server. Run `vercel --prod` to deploy. Make sure to define the `STORAGE_PATH` environment variable in your Vercel Dashboard (though note that Vercel is mostly read-only except for `/tmp`). A persistent volume provider (like DigitalOcean, AWS, Render) is typically better suited for physical-file managers.
+### Step 3: Configure Node.js Web App in Hostinger
+1. Go to Hostinger Control Panel → Advanced → Node.js
+2. Set Application Root: `/node-app`
+3. Set Entry Point: `server.js` (Or `server.cjs` if using our bundled version)
+4. Set Environment Variables (paste from .env.example)
+5. Click "Start Application"
+
+### Step 4: Ensure Storage Folder Exists and Has Permissions
+```bash
+# SSH into Hostinger or use File Manager
+mkdir -p /home/u761138213/domains/nexus.s2u.me/public_html/data
+chmod 755 /home/u761138213/domains/nexus.s2u.me/public_html/data
+```
+
+### Step 5: Test
+- Visit `https://nexus.s2u.me`
+- The app should load with the file manager UI
+- Create a folder, upload a file - all should save to `public_html/data/`
+

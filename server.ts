@@ -5,17 +5,25 @@ import path from "path";
 import multer from "multer";
 import cors from "cors";
 import dotenv from "dotenv";
+import archiver from "archiver";
 import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const STORAGE_PATH = path.resolve(process.env.STORAGE_PATH || "./storage");
+let STORAGE_PATH = process.env.STORAGE_PATH || '/home/u761138213/domains/nexus.s2u.me/public_html/data';
 
-// Ensure storage path exists
-if (!fsSync.existsSync(STORAGE_PATH)) {
-  fsSync.mkdirSync(STORAGE_PATH, { recursive: true });
+try {
+  if (!fsSync.existsSync(STORAGE_PATH)) {
+    fsSync.mkdirSync(STORAGE_PATH, { recursive: true });
+  }
+} catch (e) {
+  console.warn(`Could not create ${STORAGE_PATH}, using local fallback.`);
+  STORAGE_PATH = path.resolve("./storage");
+  if (!fsSync.existsSync(STORAGE_PATH)) {
+    fsSync.mkdirSync(STORAGE_PATH, { recursive: true });
+  }
 }
 
 // Middleware
@@ -121,7 +129,7 @@ function getFileCategory(filename: string): string {
 }
 
 // GET download file
-app.get("/api/file", async (req, res) => {
+app.get("/api/download", async (req, res) => {
   try {
     const relativePath = req.query.path as string;
     if (!relativePath) {
@@ -136,6 +144,26 @@ app.get("/api/file", async (req, res) => {
     }
     
     res.download(safePath);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET file info
+app.get("/api/info", async (req, res) => {
+  try {
+    const relativePath = req.query.path as string;
+    if (!relativePath) return res.status(400).json({ error: "Path required" });
+    const safePath = getSafePath(relativePath);
+    if (!fsSync.existsSync(safePath)) return res.status(404).json({ error: "Not found" });
+    
+    const stat = await fs.stat(safePath);
+    res.json({
+      name: path.basename(safePath),
+      size: stat.size,
+      lastModified: stat.mtime,
+      isDirectory: stat.isDirectory()
+    });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -233,27 +261,49 @@ app.post("/api/move", async (req, res) => {
   }
 });
 
-// POST copy
-app.post("/api/copy", async (req, res) => {
+// POST bulk delete
+app.post("/api/bulk-delete", async (req, res) => {
   try {
-    const sourcePath = getSafePath(req.body.sourcePath);
-    const destFolder = getSafePath(req.body.destFolder);
-    const fileName = path.basename(sourcePath);
-    const destPath = path.join(destFolder, fileName);
-    
-    if (!fsSync.existsSync(sourcePath)) {
-      res.status(404).json({ error: "Source not found" });
-      return;
+    const paths: string[] = req.body.paths || [];
+    for (const p of paths) {
+      const targetPath = getSafePath(p);
+      if (fsSync.existsSync(targetPath)) {
+        await fs.rm(targetPath, { recursive: true, force: true });
+      }
     }
-    if (fsSync.existsSync(destPath)) {
-      res.status(400).json({ error: "Destination already exists" });
-      return;
-    }
-    
-    await fs.cp(sourcePath, destPath, { recursive: true });
-    res.json({ message: "Copied successfully" });
+    res.json({ message: "Deleted successfully" });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// POST bulk download route
+app.post("/api/bulk-download", async (req, res) => {
+  try {
+    const paths: string[] = req.body.paths || [];
+    if (!paths.length) return res.status(400).json({ error: "No paths provided" });
+
+    res.attachment('download.zip');
+    const archive = archiver('zip', { zlib: { level: 5 } });
+    
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(res);
+
+    for (const p of paths) {
+      const targetPath = getSafePath(p);
+      if (fsSync.existsSync(targetPath)) {
+        const stat = fsSync.statSync(targetPath);
+        if (stat.isDirectory()) {
+          archive.directory(targetPath, path.basename(targetPath));
+        } else {
+          archive.file(targetPath, { name: path.basename(targetPath) });
+        }
+      }
+    }
+    await archive.finalize();
+  } catch (e: any) {
+    // Only send error if headers not sent
+    if (!res.headersSent) res.status(500).json({ error: e.message });
   }
 });
 

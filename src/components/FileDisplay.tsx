@@ -15,7 +15,20 @@ interface FileComponentsProps {
 }
 
 const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onContext, onPreview }) => {
-  const { currentPath, setCurrentPath } = useFiles();
+  const { currentPath, setCurrentPath, selectedIds, toggleSelection } = useFiles();
+  const isSelected = selectedIds.has(item.id);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      toggleSelection(item.id);
+      return;
+    }
+    if (item.type === 'folder') {
+      setCurrentPath([...currentPath, item.name]);
+    } else {
+      onPreview(item);
+    }
+  };
 
   return (
     <motion.div
@@ -23,10 +36,24 @@ const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDe
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="group relative flex flex-col p-5 bg-slate-900/40 border border-slate-800 rounded-2xl hover:bg-slate-800/40 hover:border-indigo-500/50 transition-all cursor-pointer backdrop-blur-md"
+      className={cn(
+        "group relative flex flex-col p-5 border rounded-2xl transition-all cursor-pointer backdrop-blur-md",
+        isSelected
+          ? "bg-indigo-500/20 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+          : "bg-slate-900/40 border-slate-800 hover:bg-slate-800/40 hover:border-indigo-500/50"
+      )}
       onContextMenu={(e) => onContext(e, item)}
-      onDoubleClick={() => item.type === 'folder' ? setCurrentPath([...currentPath, item.name]) : onPreview(item)}
+      onClick={handleClick}
     >
+      <div 
+        onClick={(e) => { e.stopPropagation(); toggleSelection(item.id); }}
+        className={cn(
+          "absolute top-3 left-3 w-5 h-5 rounded-md border flex items-center justify-center transition-all opacity-0 group-hover:opacity-100",
+          isSelected ? "opacity-100 bg-indigo-500 border-indigo-500" : "border-slate-500 cursor-pointer"
+        )}
+      >
+        {isSelected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+      </div>
       <div className="flex-1 flex flex-col items-center justify-center py-4">
         <div className={cn(
           "w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-105 shadow-sm",
@@ -58,7 +85,20 @@ const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDe
 };
 
 const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onContext, onPreview }) => {
-  const { currentPath, setCurrentPath } = useFiles();
+  const { currentPath, setCurrentPath, selectedIds, toggleSelection } = useFiles();
+  const isSelected = selectedIds.has(item.id);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      toggleSelection(item.id);
+      return;
+    }
+    if (item.type === 'folder') {
+      setCurrentPath([...currentPath, item.name]);
+    } else {
+      onPreview(item);
+    }
+  };
 
   return (
     <motion.div
@@ -66,12 +106,25 @@ const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; 
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -10 }}
-      className="group relative flex items-center px-4 py-3 bg-slate-900/40 border-b last:border-b-0 border-slate-800 hover:bg-slate-800/40 transition-colors cursor-pointer"
+      className={cn(
+        "group relative flex items-center px-4 py-3 border-b last:border-b-0 border-slate-800 transition-colors cursor-pointer",
+        isSelected ? "bg-indigo-500/10" : "bg-slate-900/40 hover:bg-slate-800/40"
+      )}
       onContextMenu={(e) => onContext(e, item)}
-      onDoubleClick={() => item.type === 'folder' ? setCurrentPath([...currentPath, item.name]) : onPreview(item)}
+      onClick={handleClick}
     >
+      <div 
+        onClick={(e) => { e.stopPropagation(); toggleSelection(item.id); }}
+        className={cn(
+          "w-5 h-5 rounded-md border flex items-center justify-center mr-4 transition-all opacity-0 group-hover:opacity-100 flex-shrink-0",
+          isSelected ? "opacity-100 bg-indigo-500 border-indigo-500" : "border-slate-500 cursor-pointer"
+        )}
+      >
+        {isSelected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+      </div>
+
       <div className={cn(
-        "w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-transform group-hover:scale-105",
+        "w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-transform group-hover:scale-105 flex-shrink-0",
         item.type === 'folder' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-slate-800/80 text-slate-400'
       )}>
         {getFileIcon(item.type, "w-5 h-5")}
