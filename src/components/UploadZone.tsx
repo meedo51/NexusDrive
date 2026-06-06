@@ -7,6 +7,7 @@ import { useFiles } from '../context/FileContext';
 export const UploadZone: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { uploadFiles } = useFiles();
 
+  // @ts-ignore
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
       if (acceptedFiles.length > 0) uploadFiles(acceptedFiles);

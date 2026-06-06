@@ -4,11 +4,11 @@ export type SortBy = 'name' | 'size' | 'date';
 export type SortOrder = 'asc' | 'desc';
 
 export interface FileItem {
-  id: string;
+  id: string; // usually path
   name: string;
   type: FileType;
   size: number;
   modifiedAt: string; // ISO string
-  folderId: string | null;
-  blob?: Blob;
+  handle: any; // FileSystemHandle
+  blob?: File; // Native File
 }

@@ -1,13 +1,12 @@
 import Dexie, { Table } from 'dexie';
-import { FileItem } from '../types';
 
 export class AppDB extends Dexie {
-  files!: Table<FileItem, string>;
+  settings!: Table<{ id: string; handle: any }, string>;
 
   constructor() {
-    super('NexusFilesDB');
+    super('NexusStoreLocalFS_DB');
     this.version(1).stores({
-      files: 'id, folderId, type, name'
+      settings: 'id'
     });
   }
 }

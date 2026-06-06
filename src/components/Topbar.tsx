@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { useFiles } from '../context/FileContext';
-import { Search, LayoutGrid, List, Menu, Plus, Upload, DownloadCloud } from 'lucide-react';
+import { Search, LayoutGrid, List, Menu, Plus, Upload, LogOut, Settings as SettingsIcon } from 'lucide-react';
 
-export const Topbar: React.FC<{ onOpenSidebar: () => void; onCreateFolder: () => void }> = ({ onOpenSidebar, onCreateFolder }) => {
-  const { searchQuery, setSearchQuery, viewMode, setViewMode, uploadFiles, exportZip } = useFiles();
+export const Topbar: React.FC<{ onOpenSidebar: () => void; onCreateFolder: () => void; onOpenSettings: () => void }> = ({ onOpenSidebar, onCreateFolder, onOpenSettings }) => {
+  const { searchQuery, setSearchQuery, viewMode, setViewMode, uploadFiles, disconnectStorage, connectStorage } = useFiles();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,10 +45,6 @@ export const Topbar: React.FC<{ onOpenSidebar: () => void; onCreateFolder: () =>
           <Plus className="w-4 h-4" /> <span className="hidden sm:inline">New Folder</span>
         </button>
 
-        <button onClick={exportZip} className="p-2 ml-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors" title="Export as ZIP">
-          <DownloadCloud className="w-5 h-5" />
-        </button>
-        
         <div className="h-8 w-px bg-slate-800 mx-1 hidden sm:block" />
 
         <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 hidden sm:flex">
@@ -65,6 +61,10 @@ export const Topbar: React.FC<{ onOpenSidebar: () => void; onCreateFolder: () =>
             <List className="w-4 h-4" />
           </button>
         </div>
+
+        <button onClick={onOpenSettings} className="p-2 ml-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors" title="Settings">
+          <SettingsIcon className="w-5 h-5" />
+        </button>
       </div>
     </header>
   );

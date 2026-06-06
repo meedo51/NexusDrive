@@ -1,172 +1,289 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import JSZip from 'jszip';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import { saveAs } from 'file-saver';
 import { db } from '../db/db';
 import { FileItem, FileType, ViewMode, SortBy, SortOrder } from '../types';
 
 interface FileContextType {
+  isSupported: boolean;
+  rootHandle: any;
+  needsPermission: boolean;
+  rootName: string;
+
   files: FileItem[];
-  currentFolderId: string | null;
+  currentPath: string[]; // array of subfolder names
   searchQuery: string;
   filterType: FileType | 'all';
   sortBy: SortBy;
   sortOrder: SortOrder;
   viewMode: ViewMode;
   displayedFiles: FileItem[];
-  breadcrumbs: FileItem[];
+  error: string | null;
+  setError: (e: string | null) => void;
   
-  setCurrentFolderId: (id: string | null) => void;
+  connectStorage: () => Promise<void>;
+  grantPermission: () => Promise<void>;
+  disconnectStorage: () => Promise<void>;
+
+  setCurrentPath: (path: string[]) => void;
   setSearchQuery: (q: string) => void;
   setFilterType: (t: FileType | 'all') => void;
   setSortBy: (s: SortBy) => void;
   setSortOrder: (o: SortOrder) => void;
   setViewMode: (v: ViewMode) => void;
   
-  createFolder: (name: string) => void;
-  uploadFiles: (files: File[]) => void;
-  deleteFile: (id: string) => void;
-  renameFile: (id: string, newName: string) => void;
-  downloadFile: (id: string) => void;
-  exportZip: () => Promise<void>;
+  createFolder: (name: string) => Promise<void>;
+  uploadFiles: (files: File[]) => Promise<void>;
+  deleteFile: (item: FileItem) => Promise<void>;
+  renameFile: (item: FileItem, newName: string) => Promise<void>;
+  downloadFile: (item: FileItem) => void;
 }
 
 const FileContext = createContext<FileContextType | undefined>(undefined);
 
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const allFiles = useLiveQuery(() => db.files.toArray(), []) || [];
-  
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(true);
+  const [rootHandle, setRootHandle] = useState<any>(null);
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [rootName, setRootName] = useState<string>('');
+
+  const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FileType | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [error, setError] = useState<string | null>(null);
 
-  const breadcrumbs = useMemo(() => {
-    const crumbs: FileItem[] = [];
-    let current = allFiles.find(f => f.id === currentFolderId);
-    while (current) {
-      crumbs.unshift(current);
-      current = allFiles.find(f => f.id === current?.folderId);
+  useEffect(() => {
+    if (!('showDirectoryPicker' in window)) {
+      setIsSupported(false);
+      return;
     }
-    return crumbs;
-  }, [allFiles, currentFolderId]);
+    db.settings.get('root-handle').then(async (record) => {
+      if (record && record.handle) {
+        const handle = record.handle;
+        setRootName(handle.name);
+        try {
+          const perm = await handle.queryPermission({ mode: 'readwrite' });
+          if (perm === 'granted') {
+            setRootHandle(handle);
+            loadDirectory(handle, []);
+          } else {
+            setRootHandle(handle);
+            setNeedsPermission(true);
+          }
+        } catch (e) {
+          console.error("Permission query failed:", e);
+        }
+      }
+    });
+  }, []);
+
+  const resolvePath = async (root: any, path: string[]) => {
+    let curr = root;
+    for (const part of path) {
+      curr = await curr.getDirectoryHandle(part);
+    }
+    return curr;
+  };
+
+  const loadDirectory = async (root: any, path: string[]) => {
+    try {
+      const dir = await resolvePath(root, path);
+      const items: FileItem[] = [];
+      // @ts-ignore
+      for await (const [name, handle] of dir.entries()) {
+        if (handle.kind === 'file') {
+          const file = await handle.getFile();
+          let type: FileType = 'other';
+          if (file.type.startsWith('image/')) type = 'image';
+          else if (file.type.startsWith('video/')) type = 'video';
+          else if (file.type === 'application/pdf' || file.name.match(/\\.(doc|docx|txt|md|csv|json)$/i)) type = 'document';
+
+          items.push({
+             id: [...path, name].join('/'),
+             name, type, size: file.size,
+             modifiedAt: new Date(file.lastModified).toISOString(),
+             handle, blob: file
+          });
+        } else if (handle.kind === 'directory') {
+          items.push({
+             id: [...path, name].join('/'),
+             name, type: 'folder', size: 0,
+             modifiedAt: new Date().toISOString(),
+             handle
+          });
+        }
+      }
+      setFiles(items);
+      setCurrentPath(path);
+    } catch (err) {
+      console.error('Failed to load dir', err);
+    }
+  };
+
+  const connectStorage = async () => {
+    try {
+      // @ts-ignore
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await db.settings.put({ id: 'root-handle', handle });
+      setRootHandle(handle);
+      setRootName(handle.name);
+      setNeedsPermission(false);
+      await loadDirectory(handle, []);
+    } catch (e) {
+      console.warn('User aborted or error:', e);
+    }
+  };
+
+  const grantPermission = async () => {
+    if (!rootHandle) return;
+    try {
+      const perm = await rootHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        setNeedsPermission(false);
+        await loadDirectory(rootHandle, currentPath);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const disconnectStorage = async () => {
+    await db.settings.clear();
+    setRootHandle(null);
+    setRootName('');
+    setFiles([]);
+    setCurrentPath([]);
+  };
 
   const displayedFiles = useMemo(() => {
-    let result = [...allFiles];
-
+    let result = [...files];
     if (searchQuery.trim()) {
       result = result.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    } else {
-      result = result.filter(f => f.folderId === currentFolderId);
     }
-
     if (filterType !== 'all') {
       result = result.filter(f => f.type === filterType);
     }
-
     result.sort((a, b) => {
       let comparison = 0;
-      if (sortBy === 'name') {
-        comparison = a.name.localeCompare(b.name);
-      } else if (sortBy === 'size') {
-        comparison = a.size - b.size;
-      } else if (sortBy === 'date') {
-        comparison = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
-      }
+      if (sortBy === 'name') comparison = a.name.localeCompare(b.name);
+      else if (sortBy === 'size') comparison = a.size - b.size;
+      else if (sortBy === 'date') comparison = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
 
       if (a.type === 'folder' && b.type !== 'folder') return -1;
       if (b.type === 'folder' && a.type !== 'folder') return 1;
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-
     return result;
-  }, [allFiles, currentFolderId, searchQuery, filterType, sortBy, sortOrder]);
+  }, [files, searchQuery, filterType, sortBy, sortOrder]);
 
-  const createFolder = useCallback(async (name: string) => {
-    const newFolder: FileItem = {
-      id: crypto.randomUUID(),
-      name,
-      type: 'folder',
-      size: 0,
-      modifiedAt: new Date().toISOString(),
-      folderId: currentFolderId,
-    };
-    await db.files.add(newFolder);
-  }, [currentFolderId]);
-
-  const uploadFiles = useCallback(async (files: File[]) => {
-    const items: FileItem[] = files.map(file => {
-      let type: FileType = 'other';
-      if (file.type.startsWith('image/')) type = 'image';
-      else if (file.type.startsWith('video/')) type = 'video';
-      else if (file.type === 'application/pdf' || file.type.includes('document') || file.type.includes('text')) type = 'document';
-
-      return {
-        id: crypto.randomUUID(),
-        name: file.name,
-        type,
-        size: file.size,
-        modifiedAt: new Date().toISOString(),
-        folderId: currentFolderId,
-        blob: file
-      };
-    });
-    await db.files.bulkAdd(items);
-  }, [currentFolderId]);
-
-  const deleteFile = useCallback(async (id: string) => {
-    const idsToDelete = new Set<string>();
-    const gatherChildren = async (parentId: string) => {
-      idsToDelete.add(parentId);
-      const children = await db.files.where('folderId').equals(parentId).toArray();
-      for (const child of children) {
-        await gatherChildren(child.id);
-      }
-    };
-    await gatherChildren(id);
-    await db.files.bulkDelete(Array.from(idsToDelete));
-  }, []);
-
-  const renameFile = useCallback(async (id: string, newName: string) => {
-    await db.files.update(id, { name: newName, modifiedAt: new Date().toISOString() });
-  }, []);
-
-  const downloadFile = useCallback(async (id: string) => {
-    const file = await db.files.get(id);
-    if (file && file.blob) {
-      saveAs(file.blob, file.name);
+  const createFolder = async (name: string) => {
+    try {
+      const dir = await resolvePath(rootHandle, currentPath);
+      await dir.getDirectoryHandle(name, { create: true });
+      await loadDirectory(rootHandle, currentPath);
+      setError(null);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to create folder. It might already exist.");
     }
-  }, []);
+  };
 
-  const exportZip = useCallback(async () => {
-    const zip = new JSZip();
-    const all = await db.files.toArray();
-    
-    const addFilesToZip = (folderId: string | null, currentZip: JSZip) => {
-      const children = all.filter(f => f.folderId === folderId);
-      for (const child of children) {
-        if (child.type === 'folder') {
-          const newZipFolder = currentZip.folder(child.name);
-          if (newZipFolder) addFilesToZip(child.id, newZipFolder);
-        } else if (child.blob) {
-          currentZip.file(child.name, child.blob);
-        }
+  const uploadFiles = async (filesToUpload: File[]) => {
+    try {
+      const dir = await resolvePath(rootHandle, currentPath);
+      for (const f of filesToUpload) {
+        const fileHandle = await dir.getFileHandle(f.name, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(f);
+        await writable.close();
       }
-    };
-    
-    addFilesToZip(null, zip);
-    const content = await zip.generateAsync({ type: 'blob' });
-    saveAs(content, 'NexusDrive_Export.zip');
-  }, []);
+      await loadDirectory(rootHandle, currentPath);
+      setError(null);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to upload files. Check permissions or disk space.");
+    }
+  };
+
+  const deleteFile = async (item: FileItem) => {
+    try {
+      const dir = await resolvePath(rootHandle, currentPath);
+      await dir.removeEntry(item.name, { recursive: true });
+      await loadDirectory(rootHandle, currentPath);
+      setError(null);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to delete item.");
+    }
+  };
+
+  const copyDirectory = async (sourceDir: any, destDir: any) => {
+    for await (const [name, handle] of sourceDir.entries()) {
+      if (handle.kind === 'file') {
+        const sourceFile = await handle.getFile();
+        const destFileHandle = await destDir.getFileHandle(name, { create: true });
+        const writable = await destFileHandle.createWritable();
+        await writable.write(sourceFile);
+        await writable.close();
+      } else if (handle.kind === 'directory') {
+        const newDestDir = await destDir.getDirectoryHandle(name, { create: true });
+        await copyDirectory(handle, newDestDir);
+      }
+    }
+  };
+
+  const renameFile = async (item: FileItem, newName: string) => {
+    if (item.name === newName) return;
+    try {
+      const dir = await resolvePath(rootHandle, currentPath);
+      
+      try {
+        // @ts-ignore
+        if (item.handle.move) {
+          // @ts-ignore
+          await item.handle.move(newName);
+          await loadDirectory(rootHandle, currentPath);
+          setError(null);
+          return;
+        }
+      } catch (e) {
+        console.warn("Native move failed, falling back to manual copy", e);
+      }
+
+      if (item.type === 'folder') {
+        const newDirHandle = await dir.getDirectoryHandle(newName, { create: true });
+        await copyDirectory(item.handle, newDirHandle);
+        await dir.removeEntry(item.name, { recursive: true });
+      } else {
+        const file = await item.handle.getFile();
+        const newHandle = await dir.getFileHandle(newName, { create: true });
+        const writable = await newHandle.createWritable();
+        await writable.write(file);
+        await writable.close();
+        await dir.removeEntry(item.name);
+      }
+      await loadDirectory(rootHandle, currentPath);
+      setError(null);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Failed to rename item. Name might conflict.");
+    }
+  };
+
+  const downloadFile = (item: FileItem) => {
+    if (item.blob) saveAs(item.blob, item.name);
+  };
 
   return (
     <FileContext.Provider value={{
-      files: allFiles, currentFolderId, searchQuery, filterType, sortBy, sortOrder, viewMode, displayedFiles, breadcrumbs,
-      setCurrentFolderId, setSearchQuery, setFilterType, setSortBy, setSortOrder, setViewMode,
-      createFolder, uploadFiles, deleteFile, renameFile, downloadFile, exportZip
+      isSupported, rootHandle, needsPermission, rootName, files, currentPath, searchQuery, filterType, sortBy, sortOrder, viewMode, displayedFiles, error, setError,
+      connectStorage, grantPermission, disconnectStorage, setCurrentPath, setSearchQuery, setFilterType, setSortBy, setSortOrder, setViewMode,
+      createFolder, uploadFiles, deleteFile, renameFile, downloadFile
     }}>
       {children}
     </FileContext.Provider>

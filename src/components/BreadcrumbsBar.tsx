@@ -4,26 +4,26 @@ import { ChevronRight, Home } from 'lucide-react';
 import { SortBy, SortOrder } from '../types';
 
 export const BreadcrumbsBar: React.FC = () => {
-  const { breadcrumbs, setCurrentFolderId, sortBy, setSortBy, sortOrder, setSortOrder } = useFiles();
+  const { currentPath, setCurrentPath, sortBy, setSortBy, sortOrder, setSortOrder, rootName } = useFiles();
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-6 px-6 md:px-8 border-b border-transparent">
       <nav className="flex items-center space-x-1 text-sm font-medium text-slate-500 overflow-x-auto whitespace-nowrap pb-1 sm:pb-0 hide-scrollbar">
         <button
-          onClick={() => setCurrentFolderId(null)}
-          className="p-1 rounded-md hover:bg-slate-800 hover:text-slate-200 transition-colors flex items-center"
+          onClick={() => setCurrentPath([])}
+          className={`px-2 py-1 rounded-md transition-colors flex items-center gap-2 ${currentPath.length === 0 ? 'text-slate-200 bg-slate-900 border border-slate-800' : 'hover:bg-slate-800 hover:text-slate-200'}`}
         >
-          <Home className="w-4 h-4" />
+          <Home className="w-4 h-4" /> {rootName || 'Root'}
         </button>
         
-        {breadcrumbs.map((crumb, idx) => (
-          <React.Fragment key={crumb.id}>
+        {currentPath.map((part, idx) => (
+          <React.Fragment key={idx}>
             <ChevronRight className="w-4 h-4 flex-shrink-0" />
             <button
-              onClick={() => setCurrentFolderId(crumb.id)}
-              className={`px-2 py-1 rounded-md transition-colors ${idx === breadcrumbs.length - 1 ? 'text-slate-200 bg-slate-900 border border-slate-800' : 'hover:bg-slate-800 hover:text-slate-200'}`}
+              onClick={() => setCurrentPath(currentPath.slice(0, idx + 1))}
+              className={`px-2 py-1 rounded-md transition-colors ${idx === currentPath.length - 1 ? 'text-slate-200 bg-slate-900 border border-slate-800' : 'hover:bg-slate-800 hover:text-slate-200'}`}
             >
-              {crumb.name}
+              {part}
             </button>
           </React.Fragment>
         ))}

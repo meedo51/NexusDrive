@@ -14,8 +14,8 @@ interface FileComponentsProps {
   onPreview: (item: FileItem) => void;
 }
 
-const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onRename, onDelete, onPreview, onContext }) => {
-  const { setCurrentFolderId } = useFiles();
+const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onContext, onPreview }) => {
+  const { currentPath, setCurrentPath } = useFiles();
 
   return (
     <motion.div
@@ -25,7 +25,7 @@ const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDe
       exit={{ opacity: 0, scale: 0.9 }}
       className="group relative flex flex-col p-5 bg-slate-900/40 border border-slate-800 rounded-2xl hover:bg-slate-800/40 hover:border-indigo-500/50 transition-all cursor-pointer backdrop-blur-md"
       onContextMenu={(e) => onContext(e, item)}
-      onDoubleClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : onPreview(item)}
+      onDoubleClick={() => item.type === 'folder' ? setCurrentPath([...currentPath, item.name]) : onPreview(item)}
     >
       <div className="flex-1 flex flex-col items-center justify-center py-4">
         <div className={cn(
@@ -57,8 +57,8 @@ const FileCard: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDe
   );
 };
 
-const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onRename, onDelete, onPreview, onContext }) => {
-  const { setCurrentFolderId } = useFiles();
+const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; onDelete: (i: FileItem) => void; onPreview: (i: FileItem) => void; onContext: (e: React.MouseEvent, i: FileItem) => void }> = ({ item, onContext, onPreview }) => {
+  const { currentPath, setCurrentPath } = useFiles();
 
   return (
     <motion.div
@@ -68,10 +68,7 @@ const FileListItem: React.FC<{ item: FileItem; onRename: (i: FileItem) => void; 
       exit={{ opacity: 0, x: -10 }}
       className="group relative flex items-center px-4 py-3 bg-slate-900/40 border-b last:border-b-0 border-slate-800 hover:bg-slate-800/40 transition-colors cursor-pointer"
       onContextMenu={(e) => onContext(e, item)}
-      onDoubleClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : onPreview(item)}
-      onClick={(e) => {
-        // Only open on single click for list view if prefered, but we'll stick to double-click for consistency
-      }}
+      onDoubleClick={() => item.type === 'folder' ? setCurrentPath([...currentPath, item.name]) : onPreview(item)}
     >
       <div className={cn(
         "w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-transform group-hover:scale-105",
@@ -131,7 +128,7 @@ export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDel
                </svg>
             </div>
             <p className="text-lg font-medium text-slate-400">This folder is empty</p>
-            <p className="text-sm text-slate-500 mt-1">Drag and drop files to upload</p>
+            <p className="text-sm text-slate-500 mt-1">Drag and drop files to upload or create a folder</p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
@@ -167,7 +164,7 @@ export const FileGrid: React.FC<FileComponentsProps> = ({ files, onRename, onDel
                 <button onClick={() => { onPreview(contextMenu.item); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 flex items-center gap-3 transition-colors text-slate-200">
                   <Eye className="w-4 h-4 text-slate-400" /> Preview
                 </button>
-                <button onClick={() => { downloadFile(contextMenu.item.id); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 flex items-center gap-3 transition-colors text-slate-200">
+                <button onClick={() => { downloadFile(contextMenu.item); setContextMenu(null); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 flex items-center gap-3 transition-colors text-slate-200">
                   <Download className="w-4 h-4 text-slate-400" /> Download
                 </button>
               </>
