@@ -4,7 +4,7 @@ services:
   serverfs:
     build: .
     ports:
-      - "3000:3000"
+      - "2000:2000"
     environment:
       - STORAGE_PATH=/data
       - PORT=3000
